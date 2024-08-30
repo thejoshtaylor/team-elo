@@ -67,38 +67,18 @@ def menu():
 
     return res
 
-# generate all permutations of a list of numbers
-# def permutations(l):
-#     if len(l) == 0:
-#         return []
-#     if len(l) == 1:
-#         return l
-    
-#     if len(set(l)) == 1:
-#         return l
+# Generate the team sizes
+def generateTeamSizes(playerCount, MIN_SIZE=MIN_TEAM, MAX_SIZE=MAX_TEAM):
+    # TODO allow for a team size that doesn't match, but where there's plentiful players
+    options = []
 
-#     perms = []
-#     for i in range(len(l)):
-#         m = l[i]
-#         remL = l[:i] + l[i+1:]
-#         for p in permutations(remL):
-#             perms.append([m] + p)
-#     return perms
+    for i in range(MIN_SIZE, MAX_SIZE + 1):
+        numTeams = playerCount // i
+        if numTeams * i == playerCount:
+            if numTeams % 2 == 0:
+                options.append([(i, i)] * (numTeams // 2))
 
-# # generate all permutations of a string
-# def permutationsStr(s):
-#     if len(s) == 0:
-#         return ''
-#     if len(s) == 1:
-#         return s
-
-#     l = set()
-#     for i in range(len(s)):
-#         m = s[i]
-#         remStr = s[:i] + s[i+1:]
-#         for p in permutations(remStr):
-#             l.add(m + p)
-#     return l
+    return options
 
 # Generate the team options
 def generateOptions(players, team_sizes=[(5, 5)]):
@@ -118,10 +98,14 @@ def generateOptions(players, team_sizes=[(5, 5)]):
     if len(players) != len(indexes):
         raise ValueError(f"Number of players ({len(players)}) must match the sum of team sizes ({len(indexes)})")
     
+    print(indexes)
+    perms = list(multiset_permutations(indexes))
+    print(f"Generating {len(perms)} permutations")
+    
     # Get all orders of indexes
-    for ind, p in enumerate(multiset_permutations(indexes)):
+    for ind, p in enumerate(perms):
         per = [(int(a) - int('0')) for a in p]
-        print(f" Permutation {ind+1}", end='\r')
+        print(f" Permutation {ind+1}/{len(perms)}", end='\r')
         teams = []
         for i in range(teamCount):
             teams.append([])
@@ -142,19 +126,8 @@ def generateOptions(players, team_sizes=[(5, 5)]):
 
     options.sort(key=l)
 
+    print()
     return options
-
-def getUniquenessOfPair(teamPair1, teamPair2):
-    # get the unique players in each team
-    team1a = teamPair1['team1'] + teamPair2['team1']
-    team2a = teamPair1['team2'] + teamPair2['team2']
-    team1b = teamPair1['team1'] + teamPair2['team2']
-    team2b = teamPair1['team2'] + teamPair2['team1']
-
-    uniqueA = len(set([player['name'] for player in team1a])) + len(set([player['name'] for player in team2a]))
-    uniqueB = len(set([player['name'] for player in team1b])) + len(set([player['name'] for player in team2b]))
-
-    return min(uniqueA, uniqueB)
 
 def getUniquenessOfTeams(team1, team2):
     return len(set([player['name'] for player in team1+team2])) - len(team1)
@@ -163,6 +136,9 @@ def getUniquenessOfOptions(option1, option2):
     # get lists of teams
     teams1 = [team['players'] for team in option1]
     teams2 = [team['players'] for team in option2]
+
+    if len(teams1) != len(teams2):
+        return len(teams1) + len(teams2)
 
     # generate all combinations of comparisons
     teams = list(range(1, len(teams1) + 1))
@@ -214,19 +190,27 @@ def main():
             print()
         elif choice == 'g':
             print()
-            options = generateOptions(players)
+            print(generateTeamSizes(len(players)))
+            print()
+
+            options = []
+
+            for i, team_sizes in enumerate(generateTeamSizes(len(players))):
+                options.extend(generateOptions(players, team_sizes))
             print(f"Generated {len(options)} options")
             print()
+
+            options.sort(key=lambda x: sum([abs(x[i]['elo'] - x[i+1]['elo']) for i in range(0, len(x), 2)]))
 
             currentOption = options[0]
             # print elo differences
             for i, option in enumerate(options):
-                sum = 0
+                x = 0
                 print(f"[{i+1:3d}]", end=' ')
                 for i in range(0, len(option), 2):
                     print(f"({option[i]['elo']} - {option[i + 1]['elo']})", end=' + ')
-                    sum += abs(option[i]['elo'] - option[i + 1]['elo'])
-                print(f'\b\b= {sum}', end='')
+                    x += abs(option[i]['elo'] - option[i + 1]['elo'])
+                print(f'\b\b= {x}', end='')
                 print(f" ({getUniquenessOfOptions(currentOption, option)})")
 
             print()
