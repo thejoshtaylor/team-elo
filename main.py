@@ -3,8 +3,7 @@
 
 import os
 import csv
-from itertools import permutations
-from sympy.utilities.iterables import multiset_permutations
+from itertools import permutations, combinations
 
 # Defaults
 START_ELO = 1000
@@ -80,53 +79,41 @@ def generateTeamSizes(playerCount, MIN_SIZE=MIN_TEAM, MAX_SIZE=MAX_TEAM):
 
     return options
 
+def generateCombos(playerIndexes, team_sizes=[5, 5]):
+    if team_sizes == []:
+        return []
+    
+    firstMember = None
+    for combo in combinations(playerIndexes, team_sizes[0]):
+        if firstMember is None:
+            firstMember = combo[0]
+
+        if len(team_sizes) == 1:
+            yield [combo]
+        else:
+            # Make sure the first member is always in the set
+            if firstMember not in combo:
+                continue
+            remaining = [p for p in playerIndexes if p not in combo]
+            for subcombo in generateCombos(remaining, team_sizes[1:]):
+                yield [combo] + subcombo
+
 # Generate the team options
 def generateOptions(players, team_sizes=[(5, 5)]):
     options = []
 
-    # Count how many teams we want to make
-    teamCount = sum([len(t) for t in team_sizes])
+    # flatten team sizes
+    flat_teams = [team for teams in team_sizes for team in teams]
 
-    print(f"Generating {teamCount} teams")
+    # generate all possible team combinations then package them in a dictionary
+    combos = generateCombos(list(range(len(players))), flat_teams)
+    for combo in combos:
+        teams_dict = []
+        for i, team in enumerate(combo):
+            entry = {"team_number": i + 1, "players": [players[player] for player in team], "elo": sum([players[player]['elo'] for player in team])}
+            teams_dict.append(entry)
+        options.append(teams_dict)
 
-    indexes = []
-    for i, (num1, num2) in enumerate(team_sizes):
-        indexes.extend([i * 2] * num1)
-        indexes.extend([i * 2 + 1] * num2)
-
-    # TODO allow for a team size that doesn't match, but where there's plentiful players
-    if len(players) != len(indexes):
-        raise ValueError(f"Number of players ({len(players)}) must match the sum of team sizes ({len(indexes)})")
-    
-    print(indexes)
-    perms = list(multiset_permutations(indexes))
-    print(f"Generating {len(perms)} permutations")
-    
-    # Get all orders of indexes
-    for ind, p in enumerate(perms):
-        per = [(int(a) - int('0')) for a in p]
-        print(f" Permutation {ind+1}/{len(perms)}", end='\r')
-        teams = []
-        for i in range(teamCount):
-            teams.append([])
-        # build the different teams
-        for i, index in enumerate(per):
-            teams[index].append(players[i])
-        # build a dictionary with pre-calculated elos
-        teamsDict = []
-        for i, team in enumerate(teams):
-            entry = {"team_number": i + 1, "players": team, "elo": sum([player['elo'] for player in team])}
-            teamsDict.append(entry)
-
-        options.append(teamsDict)
-
-    # sort by max elo difference
-    # TODO make this so it doesn't require even teams (king of the court)
-    l = lambda x: sum([abs(x[i]['elo'] - x[i+1]['elo']) for i in range(0, len(x), 2)])
-
-    options.sort(key=l)
-
-    print()
     return options
 
 def getUniquenessOfTeams(team1, team2):
@@ -149,8 +136,7 @@ def getUniquenessOfOptions(option1, option2):
             uniqueness += getUniquenessOfTeams(teams1[i], teams2[p[i]-1])
         uniquenesses.append(uniqueness)
 
-    return int(min(uniquenesses) / 2)
-
+    return min(uniquenesses)
 
 # Main function
 def main():
@@ -190,28 +176,35 @@ def main():
             print()
         elif choice == 'g':
             print()
-            print(generateTeamSizes(len(players)))
-            print()
 
             options = []
 
             for i, team_sizes in enumerate(generateTeamSizes(len(players))):
                 options.extend(generateOptions(players, team_sizes))
+            print()
             print(f"Generated {len(options)} options")
             print()
+
+            # write options to file (just the names)
+            # with open('options.csv', 'w') as f:
+            #     writer = csv.writer(f, lineterminator='\n')
+            #     for option in options:
+            #         writer.writerow(sorted(','.join(sorted(player['name'] for player in team['players'])) for team in option))
 
             options.sort(key=lambda x: sum([abs(x[i]['elo'] - x[i+1]['elo']) for i in range(0, len(x), 2)]))
 
             currentOption = options[0]
             # print elo differences
-            for i, option in enumerate(options):
+            for j, option in enumerate(options):
                 x = 0
-                print(f"[{i+1:3d}]", end=' ')
+                print(f"[{j+1:3d}]", end=' ')
                 for i in range(0, len(option), 2):
                     print(f"({option[i]['elo']} - {option[i + 1]['elo']})", end=' + ')
                     x += abs(option[i]['elo'] - option[i + 1]['elo'])
                 print(f'\b\b= {x}', end='')
                 print(f" ({getUniquenessOfOptions(currentOption, option)})")
+                if j >= 9:
+                    break
 
             print()
         elif choice == 'q':
